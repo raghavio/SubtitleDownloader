@@ -6,6 +6,12 @@ import sys
 import struct
 import collections
 import xmlrpclib
+import gzip
+import urllib2
+import StringIO
+import base64
+import collections
+
 
 server_url = 'http://api.opensubtitles.org/xml-rpc';
 user_agent = 'OSTestUserAgent'
@@ -13,25 +19,63 @@ user_agent = 'OSTestUserAgent'
 class OpenSubtitlesAPI:
 
     server = None
-
+    
+    # OpenSubtitles DB is fucked up, it returns multiple results and sometimes of different movies/series
+    # So we have to do a lot of shit to find the best sub.
     def searchSub(self, token, data):
         result = self.server.SearchSubtitles(token, data)
         if result['status'] == "200 OK":
-            if result['data'] != False:
-                x=collections.Counter(result['data'] lambda k: int(k['IDMovieImdb']))
-                print x
-                sortedData = sorted(result['data'], key=lambda k: (float(k['SubRating']), k['UserRank'], k['SubAddDate']), reverse=True)
-                for i in sortedData:
-                    #if len(result['data']) > 1 and int(i['SubBad']) > 0: #Excludes the subtitle with a subbad counter > 1
-                    #    continue
-                    print "S%02dE%02d - %s" % (int(i['SeriesSeason']), int(i['SeriesEpisode']), i['MovieName'])
-                    print i['UserRank'] #administrator
-                    print i['SubAddDate']
+            data = result['data']
+            if data != False:
+
+                # Gets the two most common movie from result by matching imdb ids
+                # (Like is said, sometimes there can be different movies in result, so we use the most common
+                # movie in the result (by checking their IMDBids) and use that. We get the 2nd most common to
+                # check if the count of 1 & 2 are not equal, in that case we use the original result.
+                most_common_movie = collections.Counter(i['IDMovieImdb'] for i in data).most_common(2)
+                movieCount = len(most_common_movie)
+
+                # We choose the most common movie if the count of 1st & 2nd are different.
+                # [0][0] is IMDb id and [0][1] is count of those IMDb ids in result
+                isMostCommon = (movieCount > 1 and most_common_movie[0][1] != most_common_movie[1][1]) or movieCount == 1
+                if isMostCommon:
+                    data = [i for i in data if i['IDMovieImdb'] == most_common_movie[0][0]]
+
+                # This is our custom rating algorithm, to find the best subtitle for this movie.
+                for i in data:
+                    i['sortAlgoRating'] = 0
+                    if int(i['SubBad']) > 0:
+                        i['sortAlgoRating'] -= 5
+                    rating = float(i['SubRating'])
+                    if rating < 4.0 and rating > 0.0:
+                        i['sortAlgoRating'] -= 5
+                    else:
+                        i['sortAlgoRating'] += round(rating)
+                    if i['UserRank'] == "administrator" or i['UserRank'] == "trusted":
+                        i['sortAlgoRating'] += 1
+
+                # We sort the data on the basis of our rating algorithm and sub add date(Assuming latest sub would be better)
+                sortedData = sorted(data, key=lambda k: (float(k['sortAlgoRating']), k['SubAddDate']), reverse=True)
+
+                # We get the top most result
+                result = sortedData[0]
+
+                # No need to change the sub name to actual movie name if we're not sure the movie is correct or not
+                if isMostCommon:
+                    if result['MovieKind'] == "episode":
+                        fileName = "[S%02dE%02d] %s" % (int(result['SeriesSeason']), int(result['SeriesEpisode']), str(result['MovieName']).replace('" ', ' - ').replace('"', ''))
+                    else:
+                        fileName = "[%s] %s" % (result['MovieYear'], result['MovieName'])
+                else:
+                    fileName = None
+                result['customName'] = fileName
                 return result
             else:
                 print "Couldn't find subtitle for this file."
+                return None
         else:
-            print "Something what happen happened."
+            print "No response from server, try later."
+            return None
 
     def hashFile(self, name):
         try:
@@ -84,8 +128,27 @@ class OpenSubtitlesAPI:
                 _hash = self.hashFile(file)
                 fileSize = path.getsize(file)
                 searchData = [{'moviehash' : _hash, 'moviebytesize' : fileSize, 'sublanguageid' : lang}]
-                self.searchSub(token, searchData)
+                result = self.searchSub(token, searchData)
+                if result is None:
+                    continue
+                '''base = path.basename(file)
                 print "==========="
+                subId = result['IDSubtitleFile']
+                result = self.server.DownloadSubtitles(token, [subId])
+                coded_sub = result['data'][0]['data']
+                decoded_sub = base64.b64decode(coded_sub)
+                subFilePath = file.replace(base, name + '.srt')
+
+                with open(subFilePath, 'wb') as subFile:
+                    subFile.write(decoded_sub)
+                #subFile.close()
+                with gzip.open(subFilePath, 'rb') as f:
+                    file_content = f.read()
+
+                with open(subFilePath, 'wb') as subFile:
+                    subFile.write(file_content)
+                #print file_content'''
+
 
 videoExts =".avi.mp4.mkv.mpeg.3gp2.3gp.3gp2.3gpp.60d.ajp.asf.asx.avchd.bik.mpe.bix\
             .box.cam.dat.divx.dmf.dv.dvr-ms.evo.flc.fli.flic.flv.flx.gvi.gvp.h264.m1v.m2p\
