@@ -1,8 +1,10 @@
 from os import path
+from operator import itemgetter, attrgetter, methodcaller
 
 import os
 import sys
 import struct
+import collections
 import xmlrpclib
 
 server_url = 'http://api.opensubtitles.org/xml-rpc';
@@ -15,11 +17,21 @@ class OpenSubtitlesAPI:
     def searchSub(self, token, data):
         result = self.server.SearchSubtitles(token, data)
         if result['status'] == "200 OK":
-            for i in result['data']:#SubBad
-                print "S%sE%s - %s" % (i['SeriesSeason'], i['SeriesEpisode'], i['MovieName'])
-                print ""
-                print ""
-            return result
+            if result['data'] != False:
+                x=collections.Counter(result['data'] lambda k: int(k['IDMovieImdb']))
+                print x
+                sortedData = sorted(result['data'], key=lambda k: (float(k['SubRating']), k['UserRank'], k['SubAddDate']), reverse=True)
+                for i in sortedData:
+                    #if len(result['data']) > 1 and int(i['SubBad']) > 0: #Excludes the subtitle with a subbad counter > 1
+                    #    continue
+                    print "S%02dE%02d - %s" % (int(i['SeriesSeason']), int(i['SeriesEpisode']), i['MovieName'])
+                    print i['UserRank'] #administrator
+                    print i['SubAddDate']
+                return result
+            else:
+                print "Couldn't find subtitle for this file."
+        else:
+            print "Something what happen happened."
 
     def hashFile(self, name):
         try:
@@ -68,15 +80,12 @@ class OpenSubtitlesAPI:
 
         if loginData['status'] == "200 OK":
             token = loginData['token']
-            searchData = []
             for file in files:
                 _hash = self.hashFile(file)
                 fileSize = path.getsize(file)
-
-                videoFile = {'moviehash' : _hash, 'moviebytesize' : fileSize, 'sublanguageid' : lang}
-                searchData.append(videoFile)
-
-            self.searchSub(token, searchData)
+                searchData = [{'moviehash' : _hash, 'moviebytesize' : fileSize, 'sublanguageid' : lang}]
+                self.searchSub(token, searchData)
+                print "==========="
 
 videoExts =".avi.mp4.mkv.mpeg.3gp2.3gp.3gp2.3gpp.60d.ajp.asf.asx.avchd.bik.mpe.bix\
             .box.cam.dat.divx.dmf.dv.dvr-ms.evo.flc.fli.flic.flv.flx.gvi.gvp.h264.m1v.m2p\
