@@ -19,7 +19,27 @@ user_agent = 'OSTestUserAgent'
 class OpenSubtitlesAPI:
 
     server = None
-    
+
+    def createSubFile(self, decodedGZIPSub, subFilePath):
+        with open(subFilePath, 'wb') as subFile:
+            subFile.write(decodedGZIPSub)
+
+        with gzip.open(subFilePath, 'rb') as subFile:
+            decodedSub = subFile.read()
+
+        with open(subFilePath, 'wb') as subFile:
+            subFile.write(decodedSub)
+
+
+    def decodeSub(self, encodedSub):
+        decoded_sub = base64.b64decode(encodedSub)
+        return decoded_sub
+
+    def downloadEncodedSub(self, token, subId):
+        result = self.server.DownloadSubtitles(token, [subId])
+        encodedSub = result['data'][0]['data']
+        return encodedSub
+
     # OpenSubtitles DB is fucked up, it returns multiple results and sometimes of different movies/series
     # So we have to do a lot of shit to find the best sub.
     def searchSub(self, token, data):
@@ -118,36 +138,32 @@ class OpenSubtitlesAPI:
             print 'An error occured while logging in: %s' % e
             sys.exit(1)
 
-    def init(self, files, lang):
+    def init(self, filePaths, fileNames, fileExts, lang):
         self.server = xmlrpclib.Server(server_url);
         loginData = self.login(lang)
 
         if loginData['status'] == "200 OK":
             token = loginData['token']
-            for file in files:
+            for i,fileName in enumerate(fileNames):
+                print filePaths[i], fileName, fileExts[i]
+                file = path.join(filePaths[i], fileName + fileExts[i])
                 _hash = self.hashFile(file)
                 fileSize = path.getsize(file)
                 searchData = [{'moviehash' : _hash, 'moviebytesize' : fileSize, 'sublanguageid' : lang}]
                 result = self.searchSub(token, searchData)
                 if result is None:
+                    filePaths.pop(i)
+                    fileNames.pop(i)
+                    fileExts.pop(i)
                     continue
-                '''base = path.basename(file)
-                print "==========="
                 subId = result['IDSubtitleFile']
-                result = self.server.DownloadSubtitles(token, [subId])
-                coded_sub = result['data'][0]['data']
-                decoded_sub = base64.b64decode(coded_sub)
-                subFilePath = file.replace(base, name + '.srt')
-
-                with open(subFilePath, 'wb') as subFile:
-                    subFile.write(decoded_sub)
-                #subFile.close()
-                with gzip.open(subFilePath, 'rb') as f:
-                    file_content = f.read()
-
-                with open(subFilePath, 'wb') as subFile:
-                    subFile.write(file_content)
-                #print file_content'''
+                encodedSub = self.downloadEncodedSub(token, subId)
+                decodedGZIPSub = self.decodeSub(encodedSub)
+                newMovieName = subFileName = result['customName'] = fileName if result['customName'] is None else result['customName']
+                newMovieFilePath = path.join(filePaths[i], newMovieName + fileExts[i])
+                os.rename(file, newMovieFilePath)
+                subFile = path.join(filePaths[i], subFileName + "." + result['SubFormat'])
+                self.createSubFile(decodedGZIPSub, subFile)
 
 
 videoExts =".avi.mp4.mkv.mpeg.3gp2.3gp.3gp2.3gpp.60d.ajp.asf.asx.avchd.bik.mpe.bix\
@@ -163,16 +179,19 @@ def main():
 
     directory = sys.argv[1]
 
-    files = []
-    for file in os.listdir(directory):
-        if path.isfile(path.join(directory, file)):
+    filePaths, fileNames, fileExts = [], [], []
+    for fileName in os.listdir(directory):
+        file = path.join(directory, fileName)
+        if path.isfile(file):
             ext = path.splitext(file)[1]
-            if ext == "": #Getting .DS_STORE
+            if ext == "": #Getting .DS_STORE on mac
                 continue
             if ext in videoExts:
-                files.append(path.join(directory,file))
+                filePaths.append(directory)
+                fileNames.append(fileName[:len(fileName) - len(ext)])
+                fileExts.append(ext)
     o = OpenSubtitlesAPI()
-    o.init(files, 'eng')
+    o.init(filePaths, fileNames, fileExts, 'eng')
 
 if __name__ == '__main__':
     main()
