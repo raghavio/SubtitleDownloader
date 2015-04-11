@@ -1,14 +1,10 @@
 from os import path
-from operator import itemgetter, attrgetter, methodcaller
 
 import os
 import sys
 import struct
-import collections
 import xmlrpclib
 import gzip
-import urllib2
-import StringIO
 import base64
 import collections
 
@@ -196,8 +192,8 @@ class OpenSubtitlesAPI:
                 os.rename(file, newMovieFilePath)
 
 
-videoExts =".avi.mp4.mkv.mpeg.3gp2.3gp.3gp2.3gpp.60d.ajp.asf.asx.avchd.bik.mpe.bix\
-            .box.cam.dat.divx.dmf.dv.dvr-ms.evo.flc.fli.flic.flv.flx.gvi.gvp.h264.m1v.m2p\
+videoExts =".avi.mp4.mkv.mpeg.flv.3gp2.3gp.3gp2.3gpp.60d.ajp.asf.asx.avchd.bik.mpe.bix\
+            .box.cam.dat.divx.dmf.dv.dvr-ms.evo.flc.fli.flic.flx.gvi.gvp.h264.m1v.m2p\
             .m2ts.m2v.m4e.m4v.mjp.mjpeg.mjpg.mpg.moov.mov.movhd.movie.movx.wx.mpv\
             .mpv2.mxf.nsv.nut.ogg.ogm.omf.ps.qt.ram.rm.rmvb.swf.ts.vfw.vid.video.viv\
             .vivo.vob.vro.wm.wmv.wmx.wrap.wvx.x264.xvid"
