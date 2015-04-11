@@ -94,7 +94,7 @@ class OpenSubtitlesAPI:
                 else:
                     fileName = None
                 result['customName'] = fileName
-                
+
                 return result
             else:
                 print "Couldn't find subtitle for this file."
@@ -161,14 +161,14 @@ class OpenSubtitlesAPI:
                     fileNames.pop(i)
                     fileExts.pop(i)
                     continue
-                '''subId = result['IDSubtitleFile']
+                subId = result['IDSubtitleFile']
                 encodedSub = self.downloadEncodedSub(token, subId)
                 decodedGZIPSub = self.decodeSub(encodedSub)
                 newMovieName = subFileName = result['customName'] = fileName if result['customName'] is None else result['customName']
                 newMovieFilePath = path.join(filePaths[i], newMovieName + fileExts[i])
                 os.rename(file, newMovieFilePath)
                 subFile = path.join(filePaths[i], subFileName + "." + result['SubFormat'])
-                self.createSubFile(decodedGZIPSub, subFile)'''
+                self.createSubFile(decodedGZIPSub, subFile)
 
 
 videoExts =".avi.mp4.mkv.mpeg.3gp2.3gp.3gp2.3gpp.60d.ajp.asf.asx.avchd.bik.mpe.bix\
