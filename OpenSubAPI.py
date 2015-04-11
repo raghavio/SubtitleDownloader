@@ -40,6 +40,22 @@ class OpenSubtitlesAPI:
         encodedSub = result['data'][0]['data']
         return encodedSub
 
+    # This is our custom rating algorithm, to find the best suitable sub in a list of dictionaries.
+    # It inserts our calulated rating value in the dictionary and returns the list.
+    def ratingAlgorithm(self, data):
+        for i in data:
+            i['ratingAlgo'] = 0
+            if int(i['SubBad']) > 0:
+                i['ratingAlgo'] -= 5
+            rating = float(i['SubRating'])
+            if rating < 4.0 and rating > 0.0:
+                i['ratingAlgo'] -= 5
+            else:
+                i['ratingAlgo'] += round(rating)
+            if i['UserRank'] == "administrator" or i['UserRank'] == "trusted":
+                i['ratingAlgo'] += 1
+        return data
+
     # OpenSubtitles DB is fucked up, it returns multiple results and sometimes of different movies/series
     # So we have to do a lot of shit to find the best sub.
     def searchSub(self, token, data):
@@ -61,21 +77,10 @@ class OpenSubtitlesAPI:
                 if isMostCommon:
                     data = [i for i in data if i['IDMovieImdb'] == most_common_movie[0][0]]
 
-                # This is our custom rating algorithm, to find the best subtitle for this movie.
-                for i in data:
-                    i['sortAlgoRating'] = 0
-                    if int(i['SubBad']) > 0:
-                        i['sortAlgoRating'] -= 5
-                    rating = float(i['SubRating'])
-                    if rating < 4.0 and rating > 0.0:
-                        i['sortAlgoRating'] -= 5
-                    else:
-                        i['sortAlgoRating'] += round(rating)
-                    if i['UserRank'] == "administrator" or i['UserRank'] == "trusted":
-                        i['sortAlgoRating'] += 1
+                data = self.ratingAlgorithm(data)
 
                 # We sort the data on the basis of our rating algorithm and sub add date(Assuming latest sub would be better)
-                sortedData = sorted(data, key=lambda k: (float(k['sortAlgoRating']), k['SubAddDate']), reverse=True)
+                sortedData = sorted(data, key=lambda k: (float(k['ratingAlgo']), k['SubAddDate']), reverse=True)
 
                 # We get the top most result
                 result = sortedData[0]
@@ -89,6 +94,7 @@ class OpenSubtitlesAPI:
                 else:
                     fileName = None
                 result['customName'] = fileName
+                
                 return result
             else:
                 print "Couldn't find subtitle for this file."
@@ -145,7 +151,6 @@ class OpenSubtitlesAPI:
         if loginData['status'] == "200 OK":
             token = loginData['token']
             for i,fileName in enumerate(fileNames):
-                print filePaths[i], fileName, fileExts[i]
                 file = path.join(filePaths[i], fileName + fileExts[i])
                 _hash = self.hashFile(file)
                 fileSize = path.getsize(file)
@@ -156,14 +161,14 @@ class OpenSubtitlesAPI:
                     fileNames.pop(i)
                     fileExts.pop(i)
                     continue
-                subId = result['IDSubtitleFile']
+                '''subId = result['IDSubtitleFile']
                 encodedSub = self.downloadEncodedSub(token, subId)
                 decodedGZIPSub = self.decodeSub(encodedSub)
                 newMovieName = subFileName = result['customName'] = fileName if result['customName'] is None else result['customName']
                 newMovieFilePath = path.join(filePaths[i], newMovieName + fileExts[i])
                 os.rename(file, newMovieFilePath)
                 subFile = path.join(filePaths[i], subFileName + "." + result['SubFormat'])
-                self.createSubFile(decodedGZIPSub, subFile)
+                self.createSubFile(decodedGZIPSub, subFile)'''
 
 
 videoExts =".avi.mp4.mkv.mpeg.3gp2.3gp.3gp2.3gpp.60d.ajp.asf.asx.avchd.bik.mpe.bix\
