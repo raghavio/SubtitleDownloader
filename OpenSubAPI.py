@@ -20,9 +20,9 @@ class OpenSubtitlesAPI:
 
     server = None
 
-    def createSubFile(self, decodedGZIPSub, subFilePath):
+    def createSubFile(self, gzipSub, subFilePath):
         with open(subFilePath, 'wb') as subFile:
-            subFile.write(decodedGZIPSub)
+            subFile.write(gzipSub)
 
         with gzip.open(subFilePath, 'rb') as subFile:
             decodedSub = subFile.read()
@@ -37,7 +37,16 @@ class OpenSubtitlesAPI:
 
     def downloadEncodedSub(self, token, subId):
         result = self.server.DownloadSubtitles(token, [subId])
-        encodedSub = result['data'][0]['data']
+        if result['status'] == "200 OK":
+            data = result['data']
+            if data != False:
+                encodedSub = data[0]['data']
+            else:
+                print "Cannot find subtitle for this file."
+                return None
+        else:
+            print "No response from server, try later."
+            return None
         return encodedSub
 
     # This is our custom rating algorithm, to find the best suitable sub in a list of dictionaries.
@@ -132,7 +141,7 @@ class OpenSubtitlesAPI:
 
             f.close()
             returnedhash =  "%016x" % hash
-            return returnedhash
+            return returnedhash, filesize
         except(IOError):
               return "IOError"
 
@@ -146,29 +155,45 @@ class OpenSubtitlesAPI:
 
     def init(self, filePaths, fileNames, fileExts, lang):
         self.server = xmlrpclib.Server(server_url);
+
         loginData = self.login(lang)
 
         if loginData['status'] == "200 OK":
             token = loginData['token']
             for i,fileName in enumerate(fileNames):
                 file = path.join(filePaths[i], fileName + fileExts[i])
-                _hash = self.hashFile(file)
-                fileSize = path.getsize(file)
+                _hash, fileSize = self.hashFile(file)
+
+                if _hash == "SizeError" or _hash == "IOError":
+                    print "Uh-oh, a " + _hash + " occured. Is everything alright with your file?"
+                    continue
+
                 searchData = [{'moviehash' : _hash, 'moviebytesize' : fileSize, 'sublanguageid' : lang}]
                 result = self.searchSub(token, searchData)
+
                 if result is None:
                     filePaths.pop(i)
                     fileNames.pop(i)
                     fileExts.pop(i)
                     continue
+
                 subId = result['IDSubtitleFile']
                 encodedSub = self.downloadEncodedSub(token, subId)
-                decodedGZIPSub = self.decodeSub(encodedSub)
-                newMovieName = subFileName = result['customName'] = fileName if result['customName'] is None else result['customName']
+
+                if encodedSub is None: #This would never happen but meh...
+                    filePaths.pop(i)
+                    fileNames.pop(i)
+                    fileExts.pop(i)
+                    continue
+
+                gzipSub = self.decodeSub(encodedSub)
+
+                subFileName = newMovieName = result['customName'] = fileName if result['customName'] is None else result['customName']
+                subFile = path.join(filePaths[i], subFileName + "." + result['SubFormat'])
+                self.createSubFile(gzipSub, subFile)
+
                 newMovieFilePath = path.join(filePaths[i], newMovieName + fileExts[i])
                 os.rename(file, newMovieFilePath)
-                subFile = path.join(filePaths[i], subFileName + "." + result['SubFormat'])
-                self.createSubFile(decodedGZIPSub, subFile)
 
 
 videoExts =".avi.mp4.mkv.mpeg.3gp2.3gp.3gp2.3gpp.60d.ajp.asf.asx.avchd.bik.mpe.bix\
