@@ -149,46 +149,42 @@ class OpenSubtitlesAPI:
             print 'An error occured while logging in: %s' % e
             sys.exit(1)
 
-    def init(self, filePaths, fileNames, fileExts, lang):
+    def init(self, filesData, lang):
         self.server = xmlrpclib.Server(server_url);
 
         loginData = self.login(lang)
 
         if loginData['status'] == "200 OK":
             token = loginData['token']
-            for i,fileName in enumerate(fileNames):
-                file = path.join(filePaths[i], fileName + fileExts[i])
+            for i,fileData in enumerate(filesData):
+                file = path.join(fileData[0], fileData[1] + fileData[2])
                 _hash, fileSize = self.hashFile(file)
 
                 if _hash == "SizeError" or _hash == "IOError":
-                    print "Uh-oh, a " + _hash + " occured. Is everything alright with your file?"
+                    print "Uh-oh, a " + _hash + " occured. Make sure your file is greater than 132kb"
                     continue
 
                 searchData = [{'moviehash' : _hash, 'moviebytesize' : fileSize, 'sublanguageid' : lang}]
                 result = self.searchSub(token, searchData)
 
                 if result is None:
-                    filePaths.pop(i)
-                    fileNames.pop(i)
-                    fileExts.pop(i)
+                    filesData.pop(i)
                     continue
 
                 subId = result['IDSubtitleFile']
                 encodedSub = self.downloadEncodedSub(token, subId)
 
                 if encodedSub is None: #This would never happen but meh...
-                    filePaths.pop(i)
-                    fileNames.pop(i)
-                    fileExts.pop(i)
+                    filesData.pop(i)
                     continue
 
                 gzipSub = self.decodeSub(encodedSub)
 
-                subFileName = newMovieName = result['customName'] = fileName if result['customName'] is None else result['customName']
-                subFile = path.join(filePaths[i], subFileName + "." + result['SubFormat'])
+                subFileName = newMovieName = result['customName'] = fileData[1] if result['customName'] is None else result['customName']
+                subFile = path.join(fileData[0], subFileName + "." + result['SubFormat'])
                 self.createSubFile(gzipSub, subFile)
 
-                newMovieFilePath = path.join(filePaths[i], newMovieName + fileExts[i])
+                newMovieFilePath = path.join(fileData[0], newMovieName + fileData[2])
                 os.rename(file, newMovieFilePath)
 
 
@@ -205,7 +201,7 @@ def main():
 
     directory = sys.argv[1]
 
-    filePaths, fileNames, fileExts = [], [], []
+    filesData = []
     for fileName in os.listdir(directory):
         file = path.join(directory, fileName)
         if path.isfile(file):
@@ -213,11 +209,9 @@ def main():
             if ext == "": #Getting .DS_STORE on mac
                 continue
             if ext in videoExts:
-                filePaths.append(directory)
-                fileNames.append(fileName[:len(fileName) - len(ext)])
-                fileExts.append(ext)
+                filesData.append([directory, fileName.replace(ext, ""), ext])
     o = OpenSubtitlesAPI()
-    o.init(filePaths, fileNames, fileExts, 'eng')
+    o.init(filesData, 'eng')
 
 if __name__ == '__main__':
     main()
