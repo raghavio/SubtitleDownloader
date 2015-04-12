@@ -1,5 +1,5 @@
 from os import path
-
+#bbbbnbnbnbnbnbnbnbnbnbnbnbnbnbnbnbnbnbnbnbnbnbbbbbnbnbnbnbnbnbnbnbnbnbnbnbnnnn
 import os
 import sys
 import struct
@@ -78,14 +78,16 @@ class OpenSubtitlesAPI:
 
                 # We choose the most common movie if the count of 1st & 2nd are different.
                 # [0][0] is IMDb id and [0][1] is count of those IMDb ids in result
-                isMostCommon = (movieCount > 1 and most_common_movie[0][1] != most_common_movie[1][1]) or movieCount == 1
+                isMostCommon = ((movieCount > 1 and most_common_movie[0][1] != most_common_movie[1][1]) or
+                                movieCount == 1)
                 if isMostCommon:
                     data = [i for i in data if i['IDMovieImdb'] == most_common_movie[0][0]]
 
                 data = self.ratingAlgorithm(data)
 
                 # We sort the data on the basis of our rating algorithm and sub add date(Assuming latest sub would be better)
-                sortedData = sorted(data, key=lambda k: (float(k['ratingAlgo']), k['SubAddDate']), reverse=True)
+                sortedData = sorted(data, key=lambda k: (float(k['ratingAlgo']), k['SubAddDate']),
+                                    reverse=True)
 
                 # We get the top most result
                 result = sortedData[0]
@@ -93,7 +95,8 @@ class OpenSubtitlesAPI:
                 # No need to change the sub name to actual movie name if we're not sure the movie is correct or not
                 if isMostCommon:
                     if result['MovieKind'] == "episode":
-                        fileName = "[S%02dE%02d] %s" % (int(result['SeriesSeason']), int(result['SeriesEpisode']), str(result['MovieName']).replace('" ', ' - ').replace('"', ''))
+                        fileName = "[S%02dE%02d] %s" % (int(result['SeriesSeason']), int(result['SeriesEpisode']),
+                                                        str(result['MovieName']).replace('" ', ' - ').replace('"', ''))
                     else:
                         fileName = "[%s] %s" % (result['MovieYear'], result['MovieName'])
                 else:
@@ -143,7 +146,8 @@ class OpenSubtitlesAPI:
 
     def login(self, lang, username="", password=""):
         try:
-            result = self.server.LogIn(username, password, lang, user_agent)
+            result = self.server.LogIn(username, password,
+                                        lang, user_agent)
             return result
         except Exception, e:
             print 'An error occured while logging in: %s' % e
