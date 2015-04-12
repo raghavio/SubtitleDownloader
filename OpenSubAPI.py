@@ -3,11 +3,11 @@ from os import path
 import os
 import sys
 import struct
+import collections
+
 import xmlrpclib
 import gzip
 import base64
-import collections
-
 
 server_url = "http://api.opensubtitles.org/xml-rpc";
 user_agent = "OSTestUserAgent"
@@ -31,19 +31,23 @@ class OpenSubtitlesAPI:
         return decoded_sub
 
     def downloadEncodedSub(self, token, subId):
-        result = self.server.DownloadSubtitles(token, [subId])
-        if result['status'] == "200 OK":
-            data = result['data']
-            if data != False:
-                encodedSub = data[0]['data']
-            else:
-                print "Cannot find subtitle for this file."
+        try:
+            result = self.server.DownloadSubtitles(token, [subId])
+            if result['status'] != "200 OK":
+                print "Server returned: '" + result['status'] + "' while \
+                        downloading sub"
                 return None
-        else:
-            print "No response from server, try later."
-            return None
-        return encodedSub
 
+            data = result['data']
+            if data == False:
+                print "Couldn't find subtitle for this file."
+                return None
+
+            encodedSub = data[0]['data']
+            return encodedSub
+        except Exception, e:
+            print 'An error occured while downloading sub: %s' % e
+            sys.exit(1)
     '''
         This is our custom rating algorithm, to find the best suitable sub
         in a list of dictionaries. It inserts our calulated rating value in
@@ -63,70 +67,73 @@ class OpenSubtitlesAPI:
                 i['ratingAlgo'] += 1
         return data
 
-    # OpenSubtitles DB is fucked up, it returns multiple results and sometimes
-    # of different movies/series. So we have to do a lot of shit to find the
-    # best sub.
+    # OpenSubtitles DB is fucked up, it returns multiple results and
+    # sometimes of different movies/series. So we have to do a lot of
+    # shit to find the best sub.
     def searchSub(self, token, data):
         try:
             result = self.server.SearchSubtitles(token, data)
-            if result['status'] == "200 OK":
-                data = result['data']
-                if data != False:
 
-                    # Gets the two most common movie from result by matching
-                    # their imdb ids.
-                    # (Like I said, sometimes there can be different movies
-                    # in result, so we use the most common movie one (by
-                    # checking their IMDB ids) and use that. We get the 2nd
-                    # most common to check if the count of 1 & 2 are not equal,
-                    # in that case we use the original result.
-                    c = collections.Counter(i['IDMovieImdb'] for i in data)
-                    mostCommon = c.most_common(2)
-                    movieCount = len(mostCommon)
-
-                    # We choose the most common movie if the count of
-                    # 1st & 2nd are different. [0][0] is IMDb id and
-                    # [0][1] is count of those IMDb ids in result
-                    isMostCommon = (movieCount == 1 or
-                                    (movieCount > 1 and
-                                    mostCommon[0][1] != mostCommon[1][1]))
-                    if isMostCommon:
-                        data = [i for i in data if i['IDMovieImdb'] == mostCommon[0][0]]
-
-                    data = self.ratingAlgorithm(data)
-
-                    # We sort the data on the basis of our rating algorithm
-                    # and sub add date(Assuming the latest sub would be better)
-                    sortedData = sorted(data,
-                                        key=lambda k: (float(k['ratingAlgo']),
-                                                        k['SubAddDate']),
-                                        reverse=True)
-
-                    # We get the top most result
-                    result = sortedData[0]
-
-                    # No need to change the sub name to actual movie name if
-                    # we're not sure the movie is correct or not
-                    if isMostCommon:
-                        if result['MovieKind'] == "episode":
-                            fileName = "[S%02dE%02d] %s" % (
-                                            int(result['SeriesSeason']),
-                                            int(result['SeriesEpisode']),
-                                            result['MovieName'].replace('" ', ' - ').replace('"', ''))
-                        else:
-                            fileName = "[%s] %s" % (result['MovieYear'],
-                                                    result['MovieName'])
-                    else:
-                        fileName = None
-                    result['customName'] = fileName
-
-                    return result
-                else:
-                    print "Couldn't find subtitle for this file."
-                    return None
-            else:
-                print "No response from server, try later."
+            if result['status'] != "200 OK":
+                print "Server returned: '" + result['status'] + "' while \
+                        searching for sub"
                 return None
+
+            data = result['data']
+
+            if data == False:
+                print "Couldn't find subtitle for this file."
+                return None
+
+            # Gets the two most common movie from result by matching
+            # their imdb ids.
+            # (Like I said, sometimes there can be different movies
+            # in result, so we use the most common movie one (by
+            # checking their IMDB ids) and use that. We get the 2nd
+            # most common to check if the count of 1 & 2 are not equal,
+            # in that case we use the original result.
+            c = collections.Counter(i['IDMovieImdb'] for i in data)
+            mostCommon = c.most_common(2)
+            movieCount = len(mostCommon)
+
+            # We choose the most common movie if the count of
+            # 1st & 2nd are different. [0][0] is IMDb id and
+            # [0][1] is count of those IMDb ids in result
+            isMostCommon = (movieCount == 1 or
+                            (movieCount > 1 and
+                            mostCommon[0][1] != mostCommon[1][1]))
+            if isMostCommon:
+                data = [i for i in data if i['IDMovieImdb'] == mostCommon[0][0]]
+
+            data = self.ratingAlgorithm(data)
+
+            # We sort the data on the basis of our rating algorithm
+            # and sub add date(Assuming the latest sub would be better)
+            sortedData = sorted(data,
+                                key=lambda k: (float(k['ratingAlgo']),
+                                                k['SubAddDate']),
+                                reverse=True)
+
+            # We get the top most result
+            result = sortedData[0]
+
+            # No need to change the sub name to actual movie name if
+            # we're not sure the movie is correct or not
+            if isMostCommon:
+                if result['MovieKind'] == "episode":
+                    fileName = "[S%02dE%02d] %s" % (
+                                    int(result['SeriesSeason']),
+                                    int(result['SeriesEpisode']),
+                                    result['MovieName'].replace('" ', ' - ')
+                                                        .replace('"', ''))
+                else:
+                    fileName = "[%s] %s" % (result['MovieYear'],
+                                            result['MovieName'])
+            else:
+                fileName = None
+            result['customName'] = fileName
+
+            return result
         except Exception, e:
             print 'An error occured while searching sub: %s' % e
             sys.exit(1)
@@ -164,6 +171,15 @@ class OpenSubtitlesAPI:
         except(IOError):
               return "IOError"
 
+    # This will end the session id.
+    # This is totally unnecessary to call, but OCD.
+    def logout(self, token):
+        try:
+            self.server.LogOut(token)
+        except Exception, e:
+            print 'An error occured while logging out: %s' % e
+            sys.exit(1)
+
     def login(self, lang, username="", password=""):
         try:
             result = self.server.LogIn(username, password,
@@ -177,49 +193,53 @@ class OpenSubtitlesAPI:
         self.server = xmlrpclib.Server(server_url);
 
         loginData = self.login(lang)
-        if loginData['status'] == "200 OK":
-            token = loginData['token']
-            for i,fileData in enumerate(filesData):
-                file = path.join(fileData[0], fileData[1] + fileData[2])
-                _hash, fileSize = self.hashFile(file)
+        if loginData['status'] != "200 OK":
+            print "Server returned: '" + loginData['status'] +"' while \
+                    logging in"
+            return
+        token = loginData['token']
+        for i,fileData in enumerate(filesData):
+            file = path.join(fileData[0], fileData[1] + fileData[2])
+            _hash, fileSize = self.hashFile(file)
 
-                if _hash == "SizeError" or _hash == "IOError":
-                    print "Uh-oh, a " + _hash + " occured. Make sure your file\
-                            is greater than 132kb"
-                    continue
+            if _hash == "SizeError" or _hash == "IOError":
+                print "Uh-oh, a " + _hash + " occured. Make sure your file\
+                        is greater than 132kb"
+                continue
 
-                searchData = [{'moviehash' : _hash, 'moviebytesize' : fileSize,
-                                'sublanguageid' : lang}]
-                result = self.searchSub(token, searchData)
+            searchData = [{'moviehash' : _hash, 'moviebytesize' : fileSize,
+                            'sublanguageid' : lang}]
+            result = self.searchSub(token, searchData)
 
-                if result is None:
-                    filesData.pop(i)
-                    continue
-                subId = result['IDSubtitleFile']
-                encodedSub = self.downloadEncodedSub(token, subId)
+            if result is None:
+                filesData.pop(i)
+                continue
+            subId = result['IDSubtitleFile']
+            encodedSub = self.downloadEncodedSub(token, subId)
 
-                if encodedSub is None: #This would never happen but meh...
-                    filesData.pop(i)
-                    continue
+            if encodedSub is None: #This would never happen but meh...
+                filesData.pop(i)
+                continue
 
-                gzipSub = self.decodeSub(encodedSub)
+            gzipSub = self.decodeSub(encodedSub)
 
-                # If we want to rename the video file name with data from
-                # database we set the 'customName' to our new name.
-                # If we're not sure about the accuracy of result returnd, we
-                # don't. So 'customName' is None. see searchSub() for more info
-                renameFile = result['customName'] is not None
-                if renameFile:
-                    fileData[1] = result['customName']
-                    newMovieFile = path.join(fileData[0],
-                                             fileData[1] + fileData[2])
-                    yo = os.rename(file, newMovieFile)
+            # If we want to rename the video file name with data from
+            # database we set the 'customName' to our new name.
+            # If we're not sure about the accuracy of result returnd, we
+            # don't. So 'customName' is None. see searchSub() for more info
+            renameFile = result['customName'] is not None
+            if renameFile:
+                fileData[1] = result['customName']
+                newMovieFile = path.join(fileData[0],
+                                         fileData[1] + fileData[2])
+                os.rename(file, newMovieFile)
 
-                subFile = path.join(fileData[0],
-                                    fileData[1] + "." + result['SubFormat'])
-                self.createSubFile(gzipSub, subFile)
-        else:
-            print "Not OK Response"
+            # Gets the sub file path
+            subFile = path.join(fileData[0],
+                                fileData[1] + "." + result['SubFormat'])
+            self.createSubFile(gzipSub, subFile)
+            print "Downloaded subtitle for %s" % (fileData[1])
+        self.logout(token)
 
 videoExts =".avi.mp4.mkv.mpeg.flv.3gp2.3gp.3gp2.3gpp.60d.ajp.asf.asx.avchd.bik\
             .mpe.bix.box.cam.dat.divx.dmf.dv.dvr-ms.evo.flc.fli.flic.flx.gvi\
@@ -233,17 +253,22 @@ def main():
         print("Specify the path to the directory or file.")
         sys.exit(1)
 
-    directory = sys.argv[1]
+    downloadPath = sys.argv[1]
 
     filesData = []
-    for fileName in os.listdir(directory):
-        file = path.join(directory, fileName)
-        if path.isfile(file):
-            ext = path.splitext(file)[1]
-            if ext == "": #Getting .DS_STORE on mac
-                continue
-            if ext in videoExts:
-                filesData.append([directory, fileName.replace(ext, ""), ext])
+    if path.isfile(downloadPath):
+        root, fileName = path.split(downloadPath)
+        ext = path.splitext(fileName)[1]
+
+        filesData.append([root, fileName.replace(ext, ""), ext])
+    else: #if directory
+        for root, dirs, files in os.walk(downloadPath):
+            for fileName in files:
+                ext = path.splitext(fileName)[1]
+                if ext != "": # Getting .DS_STORE unless
+                    if ext in videoExts:
+                        filesData.append([root, fileName.replace(ext, ""), ext])
+
     o = OpenSubtitlesAPI()
     o.init(filesData, 'eng')
 
