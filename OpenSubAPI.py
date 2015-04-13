@@ -160,7 +160,7 @@ class OpenSubtitlesAPI:
             sys.exit(1)
 
     # This is a special hash function to match a subtitle files against the
-    # movie files. Got this Python implimentation from their site.
+    # movie files. Got this Python implementation from their site.
     #
     # http://trac.opensubtitles.org/projects/opensubtitles/wiki/HashSourceCodes
     def hashFile(self, name):
