@@ -1,10 +1,12 @@
 ################################################################################
 # Author: Raghav Sharma                                                        #
-# E-mail: RaghavSharma@outlook.in                                              #
+# E-mail: Raghav_FTW@hotmail.com                                               #
 #                                                                              #
 # License: GNU General Public License v2.0                                     #
 #                                                                              #
 # A subtitle downloader using the www.opensubtitles.org API                    #
+# Look http://trac.opensubtitles.org/projects/opensubtitles for more details.  #
+#                                                                              #
 # Copyright (C) 2015 Raghav Sharma                                             #
 #                                                                              #
 # This program is free software; you can redistribute it and/or modify         #
@@ -30,7 +32,7 @@ import gzip
 import base64
 
 server_url = "http://api.opensubtitles.org/xml-rpc";
-user_agent = "OSTestUserAgent"
+user_agent = "OSTestUserAgent" # Test user agent, you should request a new one.
 
 class OpenSubtitlesAPI:
 
@@ -54,25 +56,24 @@ class OpenSubtitlesAPI:
         try:
             result = self.server.DownloadSubtitles(token, [subId])
             if result['status'] != "200 OK":
-                print "Server returned: '" + result['status'] + "' while \
-                        downloading sub"
+                print ("Server returned: '" + result['status'] + "' while \
+                        downloading sub")
                 return None
 
             data = result['data']
             if data == False:
-                print "Couldn't find subtitle for this file."
+                print ("Couldn't find subtitle for this file.")
                 return None
 
             encodedSub = data[0]['data']
             return encodedSub
-        except Exception, e:
-            print 'An error occured while downloading sub: %s' % e
+        except Exception as e:
+            print ('An error occured while downloading sub: %s') % e
             sys.exit(1)
-    '''
-        This is our custom rating algorithm, to find the best suitable sub
-        in a list of dictionaries. It inserts our calulated rating value in
-        the dictionary and returns the list.
-    '''
+
+    # This is our custom rating algorithm, to find the best suitable sub
+    # in a list of dictionaries. It inserts our calulated rating value in
+    # the dictionary and returns the list.
     def ratingAlgorithm(self, data):
         for i in data:
             i['ratingAlgo'] = 0
@@ -95,14 +96,14 @@ class OpenSubtitlesAPI:
             result = self.server.SearchSubtitles(token, data)
 
             if result['status'] != "200 OK":
-                print "Server returned: '" + result['status'] + "' while \
-                        searching for sub"
+                print ("Server returned: '" + result['status'] + "' while \
+                        searching for sub")
                 return None
 
             data = result['data']
 
             if data == False:
-                print "Couldn't find subtitle for this file."
+                print ("Couldn't find subtitle for this file.")
                 return None
 
             # Gets the two most common movie from result by matching
@@ -154,10 +155,14 @@ class OpenSubtitlesAPI:
             result['customName'] = fileName
 
             return result
-        except Exception, e:
-            print 'An error occured while searching sub: %s' % e
+        except Exception as e:
+            print ('An error occured while searching sub: %s') % e
             sys.exit(1)
 
+    # This is a special hash function to match a subtitle files against the
+    # movie files. Got this Python implimentation from their site.
+    #
+    # http://trac.opensubtitles.org/projects/opensubtitles/wiki/HashSourceCodes
     def hashFile(self, name):
         try:
             longlongformat = '<q'  # little-endian long long
@@ -196,8 +201,8 @@ class OpenSubtitlesAPI:
     def logout(self, token):
         try:
             self.server.LogOut(token)
-        except Exception, e:
-            print 'An error occured while logging out: %s' % e
+        except Exception as e:
+            print ('An error occured while logging out: %s') % e
             sys.exit(1)
 
     def login(self, lang, username="", password=""):
@@ -205,8 +210,8 @@ class OpenSubtitlesAPI:
             result = self.server.LogIn(username, password,
                                         lang, user_agent)
             return result
-        except Exception, e:
-            print 'An error occured while logging in: %s' % e
+        except Exception as e:
+            print ('An error occured while logging in: %s') % e
             sys.exit(1)
 
     def init(self, files, lang):
@@ -214,15 +219,15 @@ class OpenSubtitlesAPI:
 
         loginData = self.login(lang)
         if loginData['status'] != "200 OK":
-            print "Server returned: '" + loginData['status'] +"' while \
-                    logging in"
+            print ("Server returned: '" + loginData['status'] +"' while \
+                    logging in")
             return
         token = loginData['token']
         for i, file in enumerate(files):
             _hash, fileSize = self.hashFile(file)
             if _hash == "SizeError" or _hash == "IOError":
-                print "Uh-oh, a " + _hash + " occured. Make sure your file\
-                        is greater than 132kb"
+                print ("Uh-oh, a " + _hash + " occured. Make sure your file\
+                        is greater than 132kb")
                 continue
 
             searchData = [{'moviehash' : _hash, 'moviebytesize' : fileSize,
@@ -259,7 +264,7 @@ class OpenSubtitlesAPI:
             subFile = path.join(root,
                                 fileName + "." + result['SubFormat'])
             self.createSubFile(gzipSub, subFile)
-            print "Downloaded subtitle for %s" % (fileName)
+            print ("Downloaded subtitle for %s") % (fileName)
         self.logout(token)
 
 videoExts =".avi.mp4.mkv.mpeg.flv.3gp2.3gp.3gp2.3gpp.60d.ajp.asf.asx.avchd.bik\
@@ -271,7 +276,7 @@ videoExts =".avi.mp4.mkv.mpeg.flv.3gp2.3gp.3gp2.3gpp.60d.ajp.asf.asx.avchd.bik\
 
 def main():
     if len(sys.argv) == 1:
-        print "Specify the path to the directory or file."
+        print ("Specify the path to the directory or file.")
         sys.exit(1)
 
     downloadPath = sys.argv[1]
@@ -283,11 +288,13 @@ def main():
         for root, dirs, files in os.walk(downloadPath):
             for fileName in files:
                 ext = path.splitext(fileName)[1]
-                if ext != "": # Getting .DS_STORE unless
+                if ext != "": # Getting .DS_Store unless
                     if ext in videoExts:
                         file = path.join(root, fileName)
                         downloadFiles.append(file)
+
     o = OpenSubtitlesAPI()
+    #Use http://en.wikipedia.org/wiki/List_of_ISO_639-2_codes for languages
     o.init(downloadFiles, 'eng')
 
 if __name__ == '__main__':
