@@ -189,7 +189,7 @@ class OpenSubtitlesAPI:
             print 'An error occured while logging in: %s' % e
             sys.exit(1)
 
-    def init(self, filesData, lang):
+    def init(self, files, lang):
         self.server = xmlrpclib.Server(server_url);
 
         loginData = self.login(lang)
@@ -198,10 +198,8 @@ class OpenSubtitlesAPI:
                     logging in"
             return
         token = loginData['token']
-        for i,fileData in enumerate(filesData):
-            file = path.join(fileData[0], fileData[1] + fileData[2])
+        for i, file in enumerate(files):
             _hash, fileSize = self.hashFile(file)
-
             if _hash == "SizeError" or _hash == "IOError":
                 print "Uh-oh, a " + _hash + " occured. Make sure your file\
                         is greater than 132kb"
@@ -212,33 +210,36 @@ class OpenSubtitlesAPI:
             result = self.searchSub(token, searchData)
 
             if result is None:
-                filesData.pop(i)
+                files.pop(i)
                 continue
             subId = result['IDSubtitleFile']
             encodedSub = self.downloadEncodedSub(token, subId)
 
             if encodedSub is None: #This would never happen but meh...
-                filesData.pop(i)
+                files.pop(i)
                 continue
 
             gzipSub = self.decodeSub(encodedSub)
 
+            root, fileName = path.split(file)
             # If we want to rename the video file name with data from
             # database we set the 'customName' to our new name.
             # If we're not sure about the accuracy of result returnd, we
             # don't. So 'customName' is None. see searchSub() for more info
             renameFile = result['customName'] is not None
             if renameFile:
-                fileData[1] = result['customName']
-                newMovieFile = path.join(fileData[0],
-                                         fileData[1] + fileData[2])
+                fileExt = path.splitext(fileName)[1]
+                fileName = result['customName']
+
+                newMovieFile = path.join(root,
+                                         fileName + fileExt)
                 os.rename(file, newMovieFile)
 
             # Gets the sub file path
-            subFile = path.join(fileData[0],
-                                fileData[1] + "." + result['SubFormat'])
+            subFile = path.join(root,
+                                fileName + "." + result['SubFormat'])
             self.createSubFile(gzipSub, subFile)
-            print "Downloaded subtitle for %s" % (fileData[1])
+            print "Downloaded subtitle for %s" % (fileName)
         self.logout(token)
 
 videoExts =".avi.mp4.mkv.mpeg.flv.3gp2.3gp.3gp2.3gpp.60d.ajp.asf.asx.avchd.bik\
@@ -250,27 +251,24 @@ videoExts =".avi.mp4.mkv.mpeg.flv.3gp2.3gp.3gp2.3gpp.60d.ajp.asf.asx.avchd.bik\
 
 def main():
     if len(sys.argv) == 1:
-        print("Specify the path to the directory or file.")
+        print "Specify the path to the directory or file."
         sys.exit(1)
 
     downloadPath = sys.argv[1]
 
-    filesData = []
+    downloadFiles = []
     if path.isfile(downloadPath):
-        root, fileName = path.split(downloadPath)
-        ext = path.splitext(fileName)[1]
-
-        filesData.append([root, fileName.replace(ext, ""), ext])
+        downloadFiles.append(downloadPath)
     else: #if directory
         for root, dirs, files in os.walk(downloadPath):
             for fileName in files:
                 ext = path.splitext(fileName)[1]
                 if ext != "": # Getting .DS_STORE unless
                     if ext in videoExts:
-                        filesData.append([root, fileName.replace(ext, ""), ext])
-
+                        file = path.join(root, fileName)
+                        downloadFiles.append(file)
     o = OpenSubtitlesAPI()
-    o.init(filesData, 'eng')
+    o.init(downloadFiles, 'eng')
 
 if __name__ == '__main__':
     main()
