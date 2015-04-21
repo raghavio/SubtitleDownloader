@@ -146,7 +146,8 @@ class OpenSubtitlesAPI:
                                     int(result['SeriesSeason']),
                                     int(result['SeriesEpisode']),
                                     result['MovieName'].replace('" ', ' - ')
-                                                        .replace('"', ''))
+                                                        .replace('"', '')
+                                                        .replace('/', ':'))
                 else:
                     fileName = "[%s] %s" % (result['MovieYear'],
                                             result['MovieName'])
@@ -255,9 +256,10 @@ class OpenSubtitlesAPI:
             if renameFile:
                 fileExt = path.splitext(fileName)[1]
                 fileName = result['customName']
-
                 newMovieFile = path.join(root,
                                          fileName + fileExt)
+                print "File path: ", file
+                print "New File path: ", newMovieFile
                 os.rename(file, newMovieFile)
 
             # Gets the sub file path
