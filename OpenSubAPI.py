@@ -193,7 +193,7 @@ class OpenSubtitlesAPI:
 
             f.close()
             returnedhash =  "%016x" % hash
-            return returnedhash, filesize
+            return str(returnedhash), str(filesize)
         except(IOError):
               return "IOError"
 
@@ -258,8 +258,6 @@ class OpenSubtitlesAPI:
                 fileName = result['customName']
                 newMovieFile = path.join(root,
                                          fileName + fileExt)
-                print "File path: ", file
-                print "New File path: ", newMovieFile
                 os.rename(file, newMovieFile)
 
             # Gets the sub file path
