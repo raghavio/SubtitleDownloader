@@ -102,7 +102,7 @@ class OpenSubtitlesAPI:
 
             data = result['data']
 
-            if data == False:
+            if not data:
                 print ("Couldn't find subtitle for this file.")
                 return None
 
